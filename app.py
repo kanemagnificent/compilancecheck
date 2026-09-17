@@ -11,8 +11,6 @@ Routes:
   /scan            → Image upload & compliance scan
   /scan/<scan_id>  → Detailed scan result view
   /history         → Paginated scan history with search/filter
-  /rules           → Legal Metrology rules explorer
-  /api/stats       → JSON endpoint for dashboard charts
   /api/report/<id>/pdf → Download PDF report
 """
 
@@ -32,11 +30,8 @@ from database import (
     save_audit_log, fetch_log_by_scan_id, search_logs, fetch_stats
 )
 from report_renderer import render_pdf_report
-from rule_engine import get_all_rules_summary
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# APP CONFIGURATION
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── App Configuration ────────────────────────────────────────────────────────
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "pack-proof-dev-secret-key-change-in-production")
@@ -49,9 +44,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 init_db()
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# AUTH HELPERS
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Auth Helpers ─────────────────────────────────────────────────────────────
 
 class UserProxy:
     """Minimal user object for template rendering."""
@@ -103,9 +96,7 @@ def inject_user():
     return {"current_user": None}
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ROUTES
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Routes ───────────────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
@@ -163,21 +154,6 @@ def scan():
         package_shape = request.form.get("package_shape", "rectangular")
         use_ai = "use_ai" in request.form
 
-        # Parse package dimensions
-        package_dimensions = None
-        try:
-            height = float(request.form.get("pkg_height", 0) or 0)
-            width = float(request.form.get("pkg_width", 0) or 0)
-            depth = float(request.form.get("pkg_depth", 0) or 0)
-            if height > 0 and width > 0:
-                package_dimensions = {
-                    "height_cm": height,
-                    "width_cm": width,
-                    "depth_cm": depth,
-                }
-        except (ValueError, TypeError):
-            pass
-
         # Save uploaded files
         image_paths = []
         for f in files:
@@ -193,69 +169,46 @@ def scan():
 
         # Run OCR + Compliance
         try:
-            from ocr_engine import HybridOCREngine, run_full_compliance_scan, is_ocr_available
+            from unified_compliance_engine import HybridOCREngine, run_full_check_from_ocr_result
 
-            if is_ocr_available():
-                engine = HybridOCREngine()
-                if len(image_paths) == 1:
-                    ocr_result = engine.extract(image_paths[0])
-                else:
-                    ocr_result = engine.extract_multiple(image_paths)
-
-                result = run_full_compliance_scan(
-                    ocr_result,
-                    package_shape=package_shape,
-                    package_dimensions=package_dimensions,
-                    enable_ai=use_ai,
-                )
+            engine = HybridOCREngine()
+            if len(image_paths) == 1:
+                ocr_result = engine.extract(image_paths[0])
             else:
-                # Demo mode
-                from ocr_engine import create_demo_result
-                result = create_demo_result(image_paths[0])
+                ocr_result = engine.extract_multiple(image_paths)
+
+            result = run_full_check_from_ocr_result(
+                ocr_result,
+                package_shape=package_shape,
+                enable_ai_rescue=use_ai,
+                enable_ai_synthesis=use_ai,
+            )
+
+            # Save to database
+            scan_id = str(uuid.uuid4())
+            filename_record = ", ".join([os.path.basename(p) for p in image_paths])
+
+            save_audit_log(
+                scan_id=scan_id,
+                filename=filename_record,
+                compliance_status=result["compliance_status"],
+                confidence=result.get("overall_ocr_confidence", 0.0),
+                violations=result["violations"],
+                warnings=result["warnings"],
+                audit_trail=result["audit_trail"],
+                fields=result["extracted_fields"],
+                font_size_check=result["font_size_check"],
+                compliance_score=result.get("compliance_score"),
+                needs_manual_review=result.get("needs_manual_review"),
+                ai_analysis=result.get("ai_analysis"),
+                toxicity_analysis=result.get("toxicity_analysis"),
+            )
+
+            return redirect(url_for("scan_result", scan_id=scan_id))
 
         except Exception as e:
-            # Fallback to demo mode on any error
-            try:
-                from ocr_engine import create_demo_result
-                result = create_demo_result(image_paths[0] if image_paths else "error")
-                flash(f"OCR processing failed ({str(e)[:100]}). Showing demo result.", "warning")
-            except Exception as e2:
-                flash(f"Scan failed: {str(e2)}", "error")
-                return redirect(url_for("scan"))
-
-        # Save to database
-        scan_id = str(uuid.uuid4())
-        filename_record = ", ".join([os.path.basename(p) for p in image_paths])
-
-        # Extract product classification info
-        product_class = result.get("product_classification", {})
-        pdp_info = result.get("pdp_info", {})
-
-        save_audit_log(
-            scan_id=scan_id,
-            filename=filename_record,
-            compliance_status=result["compliance_status"],
-            confidence=result.get("overall_ocr_confidence", 0.0),
-            violations=result["violations"],
-            warnings=result["warnings"],
-            audit_trail=result["audit_trail"],
-            fields=result["extracted_fields"],
-            font_size_check=result["font_size_check"],
-            compliance_score=result.get("compliance_score"),
-            needs_manual_review=result.get("needs_manual_review"),
-            ai_analysis=result.get("ai_analysis"),
-            toxicity_analysis=result.get("toxicity_analysis"),
-            product_category=product_class.get("label"),
-            package_shape=package_shape,
-            package_dimensions=package_dimensions,
-            pdp_area_cm2=pdp_info.get("pdp_area_cm2") if pdp_info else None,
-            raw_ocr_text=None,  # Don't store full text to save space
-            product_classification=product_class,
-            language_check=result.get("language_check"),
-            scanned_by=request.current_user.username,
-        )
-
-        return redirect(url_for("scan_result", scan_id=scan_id))
+            flash(f"Scan failed: {str(e)}", "error")
+            return redirect(url_for("scan"))
 
     return render_template("scan.html", active_page="scan")
 
@@ -286,13 +239,6 @@ def history():
     )
 
 
-@app.route("/rules")
-@login_required
-def rules_explorer():
-    rules = get_all_rules_summary()
-    return render_template("rules_explorer.html", rules=rules, active_page="rules")
-
-
 @app.route("/api/report/<scan_id>/pdf")
 @login_required
 def download_pdf(scan_id):
@@ -306,6 +252,7 @@ def download_pdf(scan_id):
     if not os.path.exists(report_path):
         abort(500)
 
+    # Determine if it's PDF or HTML fallback
     is_pdf = report_path.endswith(".pdf")
     mimetype = "application/pdf" if is_pdf else "text/html"
     download_name = output_filename if is_pdf else output_filename.replace(".pdf", ".html")
@@ -325,25 +272,109 @@ def api_stats():
     return jsonify(stats)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# ERROR HANDLERS
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Demo Data Generator ─────────────────────────────────────────────────────
+
+def _create_demo_result(filename):
+    """Generate a realistic demo scan result when OCR libraries aren't installed."""
+    from toxicity_engine import run_toxicity_analysis
+
+    demo_raw_text = (
+        "INGREDIENTS: Sugar, Skimmed Milk Powder, Cocoa Butter, Cocoa Mass, "
+        "Palm Oil, Emulsifiers (322, 476), Artificial Flavour, Salt, "
+        "Sodium Benzoate, Tartrazine. "
+        "NET QUANTITY: 100 g MRP Rs 150 "
+        "Mfd by: Demo Foods Pvt Ltd, Industrial Area, New Delhi "
+        "Batch: ABC12345XY Mfg Date: 15/JUN/25 "
+        "Customer care: 1800123456"
+    )
+
+    toxicity = run_toxicity_analysis(demo_raw_text, enable_ai=False)
+
+    fields = {
+        "net_quantity": {"value": "NET QUANTITY: 100 g", "confidence": 1.0, "source": "regex"},
+        "mrp": {"value": "MRP ₹ 150", "confidence": 0.95, "source": "regex"},
+        "batch_details": {"value": "Batch: ABC12345XY", "confidence": 0.85, "source": "regex"},
+        "manufacturer": {"value": "Mfd by: Demo Foods Pvt Ltd, Industrial Area, New Delhi", "confidence": 0.80, "source": "regex"},
+        "mfg_date": {"value": "Mfg Date: 15/JUN/25", "confidence": 0.95, "source": "regex"},
+        "consumer_care": {"value": "Customer care: 1800123456", "confidence": 0.85, "source": "regex"},
+        "common_name": {"value": None, "confidence": 0.0, "source": "regex"},
+    }
+
+    audit_trail = []
+    violations = []
+    warnings = []
+    step = 1
+    for field_key, field_data in fields.items():
+        if field_data["value"]:
+            result_status = "pass"
+            reason = "Requirement satisfied."
+        else:
+            if field_key in ["manufacturer", "net_quantity", "mrp"]:
+                result_status = "fail"
+                reason = f"{field_key.replace('_', ' ').title()} not clearly detected."
+                violations.append(f"{field_key.replace('_', ' ').title()}: {reason}")
+            else:
+                result_status = "warning"
+                reason = f"Could not confidently identify {field_key.replace('_', ' ')}."
+                warnings.append(f"{field_key.replace('_', ' ').title()}: {reason}")
+
+        audit_trail.append({
+            "step": step,
+            "field": field_key,
+            "label": field_key.replace("_", " ").title(),
+            "result": result_status,
+            "confidence": field_data["confidence"],
+            "reason": reason,
+            "source": field_data["source"],
+        })
+        step += 1
+
+    score = 100 - (len(violations) * 20 + len(warnings) * 10)
+    status = "COMPLIANT" if not violations and not warnings else ("NON-COMPLIANT" if violations else "COMPLIANT WITH WARNINGS")
+
+    return {
+        "status": status,
+        "compliance_score": max(0, score),
+        "confidence": 0.72,
+        "violations": violations,
+        "warnings": warnings,
+        "audit_trail": audit_trail,
+        "fields": fields,
+        "font_size_check": {
+            "value": "4.5 mm", "confidence": 1.0, "issue": None,
+            "panel_area_cm2": 80.0, "minimum_required_mm": 1.5, "compliant": True,
+        },
+        "needs_manual_review": [],
+        "ai_analysis": {
+            "executive_summary": f"Assessed as {status} with score {max(0, score)}/100. Demo mode — OCR libraries not installed.",
+            "secondary_observations": ["This is a demo result generated without actual OCR processing."],
+            "corrective_actions": violations,
+        },
+        "toxicity_analysis": toxicity,
+    }
+
+
+# ── Error Handlers ───────────────────────────────────────────────────────────
 
 @app.errorhandler(404)
 def not_found(e):
     if session.get("user_id"):
-        return render_template("base.html", active_page="", error_code=404, error_message="Page not found."), 404
+        return """<div style="text-align:center;padding:60px;font-family:Inter,sans-serif;">
+            <h1 style="font-size:48px;color:#EF4444;">404</h1>
+            <p style="color:#64748B;">Page not found.</p>
+            <a href="/" style="color:#2E7DFF;">Go to Dashboard</a></div>""", 404
     return redirect(url_for("login"))
 
 
 @app.errorhandler(403)
 def forbidden(e):
-    return render_template("base.html", active_page="", error_code=403, error_message="Access denied. Insufficient permissions."), 403
+    return """<div style="text-align:center;padding:60px;font-family:Inter,sans-serif;">
+        <h1 style="font-size:48px;color:#F59E0B;">403</h1>
+        <p style="color:#64748B;">Access denied. Insufficient permissions.</p>
+        <a href="/" style="color:#2E7DFF;">Go to Dashboard</a></div>""", 403
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# RUN
-# ═══════════════════════════════════════════════════════════════════════════════
+# ── Run ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)
