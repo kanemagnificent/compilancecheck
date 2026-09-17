@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pack Proof Compliance Report — {{ scan_id[:8] }}</title>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Inter', sans-serif; color: #1E293B; font-size: 11px; line-height: 1.5; }
+    .report { max-width: 800px; margin: 0 auto; padding: 24px; }
+    .header { background: linear-gradient(135deg, #0F1B2D, #1a3a5c); color: white; padding: 24px; border-radius: 8px; margin-bottom: 20px; }
+    .header h1 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .header .subtitle { opacity: 0.8; font-size: 10px; }
+    .header-grid { display: flex; justify-content: space-between; margin-top: 16px; }
+    .header-item { font-size: 10px; }
+    .header-item strong { display: block; font-size: 11px; }
+    .status-bar { padding: 12px 20px; border-radius: 6px; font-weight: 700; font-size: 14px; text-align: center; margin-bottom: 20px; }
+    .status-compliant { background: #D1FAE5; color: #065F46; }
+    .status-warning { background: #FEF3C7; color: #92400E; }
+    .status-noncompliant { background: #FEE2E2; color: #991B1B; }
+    .section { margin-bottom: 20px; }
+    .section h2 { font-size: 13px; font-weight: 700; color: #0F1B2D; border-bottom: 2px solid #2E7DFF; padding-bottom: 6px; margin-bottom: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    th { background: #F1F5F9; color: #475569; font-weight: 600; text-align: left; padding: 8px 10px; border: 1px solid #E2E8F0; }
+    td { padding: 7px 10px; border: 1px solid #E2E8F0; vertical-align: top; }
+    tr:nth-child(even) { background: #FAFBFC; }
+    .pass { color: #059669; font-weight: 600; }
+    .fail { color: #DC2626; font-weight: 600; }
+    .warn { color: #D97706; font-weight: 600; }
+    .skip { color: #94A3B8; }
+    .score-display { display: inline-block; font-size: 28px; font-weight: 800; margin-right: 8px; }
+    .violation-list li { color: #DC2626; margin: 4px 0; padding-left: 12px; }
+    .warning-list li { color: #D97706; margin: 4px 0; padding-left: 12px; }
+    .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #E2E8F0; font-size: 9px; color: #94A3B8; text-align: center; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 9px; font-weight: 600; }
+    .badge-high { background: #FEE2E2; color: #991B1B; }
+    .badge-moderate { background: #FEF3C7; color: #92400E; }
+    .badge-low { background: #DBEAFE; color: #1E40AF; }
+    @media print { body { font-size: 10px; } .report { padding: 12px; } }
+</style>
+</head>
+<body>
+<div class="report">
+    <!-- Header -->
+    <div class="header">
+        <h1>PACK PROOF — COMPLIANCE REPORT</h1>
+        <div class="subtitle">Legal Metrology (Packaged Commodities) Rules, 2011 · Department of Consumer Affairs</div>
+        <div class="header-grid">
+            <div class="header-item"><strong>Scan ID</strong>{{ scan_id[:8] }}</div>
+            <div class="header-item"><strong>Date</strong>{{ generated_at or timestamp[:10] }}</div>
+            <div class="header-item"><strong>File</strong>{{ filename[:40] }}</div>
+            <div class="header-item"><strong>OCR Confidence</strong>{{ confidence }}%</div>
+        </div>
+    </div>
+
+    <!-- Status -->
+    <div class="status-bar {% if compliance_status == 'COMPLIANT' %}status-compliant{% elif compliance_status == 'COMPLIANT WITH WARNINGS' %}status-warning{% else %}status-noncompliant{% endif %}">
+        <span class="score-display">{{ compliance_score or 0 }}/100</span>
+        {{ compliance_status }}
+    </div>
+
+    <!-- Disclosures -->
+    <div class="section">
+        <h2>Statutory Disclosures (PCR 2011 Rule 6)</h2>
+        <table>
+            <thead>
+                <tr><th>Declaration</th><th>Rule</th><th>Extracted Value</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+                {% for row in disclosure_rows %}
+                <tr>
+                    <td><strong>{{ row.label }}</strong></td>
+                    <td>{{ row.legal_reference }}</td>
+                    <td>{{ row.value or '—' }}</td>
+                    <td class="{% if row.result == 'pass' %}pass{% elif row.result == 'fail' %}fail{% elif row.result == 'warning' %}warn{% else %}skip{% endif %}">
+                        {% if row.result == 'pass' %}✓ PASS{% elif row.result == 'fail' %}✗ FAIL{% elif row.result == 'warning' %}⚠ WARNING{% else %}— SKIP{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Violations -->
+    {% if violations %}
+    <div class="section">
+        <h2>Violations</h2>
+        <ul class="violation-list">
+            {% for v in violations %}<li>{{ v }}</li>{% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Warnings -->
+    {% if warnings %}
+    <div class="section">
+        <h2>Warnings</h2>
+        <ul class="warning-list">
+            {% for w in warnings %}<li>{{ w }}</li>{% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Font Size -->
+    {% if font_size_check %}
+    <div class="section">
+        <h2>Font Size Analysis (Rule 7)</h2>
+        <table>
+            <tr><td>PDP Area</td><td>{{ font_size_check.pdp_area_cm2 or '—' }} cm²</td></tr>
+            <tr><td>Min Required</td><td>{{ font_size_check.min_required_mm or '—' }} mm</td></tr>
+            <tr><td>Estimated Height</td><td>{{ font_size_check.estimated_height_mm or '—' }} mm</td></tr>
+            <tr><td>Status</td><td class="{% if font_size_check.compliant %}pass{% elif font_size_check.compliant == false %}fail{% else %}skip{% endif %}">{% if font_size_check.compliant %}✓ COMPLIANT{% elif font_size_check.compliant == false %}✗ NON-COMPLIANT{% else %}— NOT VERIFIED{% endif %}</td></tr>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- Toxicity -->
+    {% if toxicity_analysis and toxicity_analysis.flagged_ingredients %}
+    <div class="section">
+        <h2>Ingredient Toxicity Advisory</h2>
+        <p><strong>Verdict:</strong> {{ toxicity_analysis.verdict }} (Score: {{ toxicity_analysis.toxicity_score }}/100)</p>
+        <table>
+            <thead><tr><th>Ingredient</th><th>Risk</th><th>Reason</th></tr></thead>
+            <tbody>
+                {% for ing in toxicity_analysis.flagged_ingredients %}
+                <tr>
+                    <td>{{ ing.name }}</td>
+                    <td><span class="badge badge-{{ ing.risk_level }}">{{ ing.risk_level|upper }}{% if ing.banned_in_india %} BANNED{% endif %}</span></td>
+                    <td>{{ ing.reason }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    <!-- AI Summary -->
+    {% if ai_analysis %}
+    <div class="section">
+        <h2>AI Analysis Summary</h2>
+        <p>{{ ai_analysis.executive_summary }}</p>
+    </div>
+    {% endif %}
+
+    <!-- Audit Trail -->
+    <div class="section">
+        <h2>Full Audit Trail</h2>
+        <table>
+            <thead><tr><th>#</th><th>Check</th><th>Rule</th><th>Result</th><th>Confidence</th><th>Reason</th></tr></thead>
+            <tbody>
+                {% for step in audit_trail %}
+                <tr>
+                    <td>{{ step.step }}</td>
+                    <td>{{ step.label }}</td>
+                    <td>{{ step.get('rule', '—') }}</td>
+                    <td class="{% if step.result == 'pass' %}pass{% elif step.result == 'fail' %}fail{% elif step.result == 'warning' %}warn{% else %}skip{% endif %}">
+                        {% if step.result == 'pass' %}✓{% elif step.result == 'fail' %}✗{% elif step.result == 'warning' %}⚠{% else %}—{% endif %}
+                    </td>
+                    <td>{{ (step.confidence * 100)|round(0)|int }}%</td>
+                    <td>{{ step.reason }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Generated by Pack Proof v2.0 — Legal Metrology Compliance Engine</p>
+        <p>Legal Metrology (Packaged Commodities) Rules, 2011 · Department of Consumer Affairs · Government of India</p>
+        <p>{{ generated_at or 'Report generated automatically' }}</p>
+    </div>
+</div>
+</body>
+</html>

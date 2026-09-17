@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Scan History{% endblock %}
+{% block breadcrumb %}Scan History{% endblock %}
+
+{% block content %}
+<div class="history-page">
+    <div class="page-header">
+        <h2>Scan History & Records</h2>
+        <p>Search, filter and review all compliance scan records</p>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="card animate-slide-up">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('history') }}" class="search-bar-form">
+                <div class="search-input-wrapper">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input type="text" name="q" value="{{ query }}" placeholder="Search by filename, scan ID, or category…" class="search-input" id="searchInput">
+                </div>
+                <div class="filter-chips">
+                    <a href="{{ url_for('history') }}" class="chip {% if not status_filter %}chip-active{% endif %}">All</a>
+                    <a href="{{ url_for('history', q=query, status='COMPLIANT') }}" class="chip {% if status_filter == 'COMPLIANT' %}chip-active{% endif %}">✓ Compliant</a>
+                    <a href="{{ url_for('history', q=query, status='COMPLIANT WITH WARNINGS') }}" class="chip {% if status_filter == 'COMPLIANT WITH WARNINGS' %}chip-active{% endif %}">⚠ Warnings</a>
+                    <a href="{{ url_for('history', q=query, status='NON-COMPLIANT') }}" class="chip {% if status_filter == 'NON-COMPLIANT' %}chip-active{% endif %}">✗ Non-Compliant</a>
+                </div>
+                <button type="submit" class="btn btn-primary btn-sm">Search</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="card animate-slide-up" style="animation-delay: 0.1s">
+        <div class="card-header">
+            <h3>Results ({{ data.total }} records)</h3>
+            <span class="badge badge-info">Page {{ data.page }} of {{ data.total_pages }}</span>
+        </div>
+        <div class="card-body">
+            {% if data.logs %}
+            <div class="table-responsive">
+                <table class="data-table" id="historyTable">
+                    <thead>
+                        <tr>
+                            <th>Scan ID</th>
+                            <th>File</th>
+                            <th>Category</th>
+                            <th>Shape</th>
+                            <th>Status</th>
+                            <th>Score</th>
+                            <th>Confidence</th>
+                            <th>Date</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for scan in data.logs %}
+                        <tr class="table-row-animate" style="animation-delay: {{ loop.index * 0.03 }}s">
+                            <td><code class="scan-id">{{ scan.scan_id[:8] }}</code></td>
+                            <td class="filename-cell" title="{{ scan.filename }}">{{ scan.filename[:25] }}{% if scan.filename|length > 25 %}…{% endif %}</td>
+                            <td>
+                                {% if scan.product_category %}
+                                <span class="category-badge">{{ scan.product_category }}</span>
+                                {% else %}
+                                <span class="category-badge category-unknown">—</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ scan.package_shape or '—' }}</td>
+                            <td>
+                                {% if scan.status == 'COMPLIANT' %}
+                                <span class="status-badge status-compliant">✓ Compliant</span>
+                                {% elif scan.status == 'COMPLIANT WITH WARNINGS' %}
+                                <span class="status-badge status-warning">⚠ Warnings</span>
+                                {% elif scan.status == 'NON-COMPLIANT' %}
+                                <span class="status-badge status-noncompliant">✗ Non-Compliant</span>
+                                {% else %}
+                                <span class="status-badge status-rescan">↻ {{ scan.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="score-pill {% if scan.compliance_score and scan.compliance_score >= 80 %}score-high{% elif scan.compliance_score and scan.compliance_score >= 50 %}score-mid{% else %}score-low{% endif %}">
+                                    {{ scan.compliance_score or 0 }}
+                                </div>
+                            </td>
+                            <td>
+                                <div class="confidence-bar mini">
+                                    <div class="confidence-fill {% if scan.confidence >= 0.7 %}conf-high{% elif scan.confidence >= 0.4 %}conf-mid{% else %}conf-low{% endif %}" style="width: {{ (scan.confidence * 100)|int }}%"></div>
+                                    <span class="confidence-text">{{ (scan.confidence * 100)|round(0)|int }}%</span>
+                                </div>
+                            </td>
+                            <td class="date-cell">{{ scan.timestamp[:10] }}</td>
+                            <td class="actions-cell">
+                                <a href="{{ url_for('scan_result', scan_id=scan.scan_id) }}" class="btn btn-sm btn-ghost" title="View details">👁</a>
+                                <a href="{{ url_for('download_pdf', scan_id=scan.scan_id) }}" class="btn btn-sm btn-ghost" title="Download report">📄</a>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            {% if data.total_pages > 1 %}
+            <div class="pagination">
+                {% if data.page > 1 %}
+                <a href="{{ url_for('history', q=query, status=status_filter, page=data.page-1) }}" class="page-btn">← Previous</a>
+                {% endif %}
+
+                {% for p in range(1, data.total_pages + 1) %}
+                {% if p == data.page %}
+                <span class="page-btn page-active">{{ p }}</span>
+                {% elif p <= 3 or p >= data.total_pages - 2 or (p >= data.page - 1 and p <= data.page + 1) %}
+                <a href="{{ url_for('history', q=query, status=status_filter, page=p) }}" class="page-btn">{{ p }}</a>
+                {% elif p == 4 or p == data.total_pages - 3 %}
+                <span class="page-ellipsis">…</span>
+                {% endif %}
+                {% endfor %}
+
+                {% if data.page < data.total_pages %}
+                <a href="{{ url_for('history', q=query, status=status_filter, page=data.page+1) }}" class="page-btn">Next →</a>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="empty-state">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#94A3B8" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <h4>No records found</h4>
+                <p>{% if query or status_filter %}Try adjusting your search filters{% else %}Upload a product image to create your first scan record{% endif %}</p>
+                {% if query or status_filter %}
+                <a href="{{ url_for('history') }}" class="btn btn-primary">Clear Filters</a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

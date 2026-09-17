@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}Scan Product{% endblock %}
+{% block breadcrumb %}Scan Product{% endblock %}
+
+{% block content %}
+<div class="scan-page">
+    <div class="page-header">
+        <h2>Scan Packaged Commodity</h2>
+        <p>Upload product label images for automated compliance checking under PCR 2011</p>
+    </div>
+
+    <form method="POST" action="{{ url_for('scan') }}" enctype="multipart/form-data" id="scanForm">
+        <div class="scan-grid">
+            <!-- Upload Zone -->
+            <div class="card animate-slide-up">
+                <div class="card-header">
+                    <h3>📷 Upload Label Images</h3>
+                    <span class="badge badge-info">Multi-image supported</span>
+                </div>
+                <div class="card-body">
+                    <div class="upload-zone" id="uploadZone">
+                        <div class="upload-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#2E7DFF" stroke-width="1.5">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                            </svg>
+                        </div>
+                        <p class="upload-text">Drag & drop images here or <span class="upload-browse">browse files</span></p>
+                        <p class="upload-hint">Supports JPG, PNG, WEBP — up to 50 MB total</p>
+                        <input type="file" name="images" id="fileInput" multiple accept="image/*" class="file-input" required>
+                    </div>
+
+                    <div class="preview-grid" id="previewGrid"></div>
+
+                    <div class="scan-tips">
+                        <h4>📋 Tips for Best Results</h4>
+                        <ul>
+                            <li>Capture the full label text area with good lighting</li>
+                            <li>Upload multiple sides for complete coverage (front, back, sides)</li>
+                            <li>Ensure text is in focus and not obscured by glare</li>
+                            <li>Minimum 300 DPI recommended for accurate font size analysis</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Panel -->
+            <div class="scan-config">
+                <!-- Package Shape -->
+                <div class="card animate-slide-up" style="animation-delay: 0.1s">
+                    <div class="card-header">
+                        <h3>📦 Package Shape</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="config-desc">Used for PDP area calculation (Rule 3, PCR 2011)</p>
+                        <div class="shape-selector">
+                            <label class="shape-card active" id="shape-rectangular">
+                                <input type="radio" name="package_shape" value="rectangular" checked>
+                                <div class="shape-icon">
+                                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <rect x="6" y="8" width="28" height="24" rx="2"/>
+                                        <line x1="6" y1="14" x2="34" y2="14" opacity="0.3"/>
+                                    </svg>
+                                </div>
+                                <span>Rectangular</span>
+                                <small>Box, carton, packet</small>
+                            </label>
+                            <label class="shape-card" id="shape-cylindrical">
+                                <input type="radio" name="package_shape" value="cylindrical">
+                                <div class="shape-icon">
+                                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <ellipse cx="20" cy="10" rx="12" ry="4"/>
+                                        <path d="M8 10v20c0 2.2 5.4 4 12 4s12-1.8 12-4V10"/>
+                                        <ellipse cx="20" cy="30" rx="12" ry="4" opacity="0.3"/>
+                                    </svg>
+                                </div>
+                                <span>Cylindrical</span>
+                                <small>Bottle, can, jar</small>
+                            </label>
+                            <label class="shape-card" id="shape-other">
+                                <input type="radio" name="package_shape" value="other">
+                                <div class="shape-icon">
+                                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <path d="M20 6L34 14v12L20 34 6 26V14L20 6z"/>
+                                    </svg>
+                                </div>
+                                <span>Other</span>
+                                <small>Pouch, sachet, tube</small>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Package Dimensions -->
+                <div class="card animate-slide-up" style="animation-delay: 0.2s">
+                    <div class="card-header">
+                        <h3>📏 Package Dimensions <span class="badge badge-optional">Optional</span></h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="config-desc">Enter dimensions for font size validation (Rule 7)</p>
+                        <div class="dimensions-grid">
+                            <div class="form-group">
+                                <label for="pkg_height">Height (cm)</label>
+                                <input type="number" id="pkg_height" name="pkg_height" step="0.1" min="0" placeholder="e.g. 15">
+                            </div>
+                            <div class="form-group">
+                                <label for="pkg_width">Width (cm)</label>
+                                <input type="number" id="pkg_width" name="pkg_width" step="0.1" min="0" placeholder="e.g. 8">
+                            </div>
+                            <div class="form-group">
+                                <label for="pkg_depth">Depth (cm)</label>
+                                <input type="number" id="pkg_depth" name="pkg_depth" step="0.1" min="0" placeholder="e.g. 4">
+                            </div>
+                        </div>
+                        <div class="pdp-preview" id="pdpPreview" style="display:none">
+                            <span class="pdp-label">Estimated PDP Area:</span>
+                            <span class="pdp-value" id="pdpValue">—</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Toggle -->
+                <div class="card animate-slide-up" style="animation-delay: 0.3s">
+                    <div class="card-header">
+                        <h3>⚙️ Scan Options</h3>
+                    </div>
+                    <div class="card-body">
+                        <label class="toggle-switch">
+                            <input type="checkbox" name="use_ai" checked>
+                            <span class="toggle-slider"></span>
+                            <span class="toggle-label">Enable AI Analysis</span>
+                            <span class="toggle-desc">Uses AI for enhanced field extraction and report generation</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Submit -->
+                <button type="submit" class="btn btn-primary btn-lg btn-scan" id="scanBtn">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span>Start Compliance Scan</span>
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <!-- Scanning Overlay -->
+    <div class="scan-overlay" id="scanOverlay" style="display:none">
+        <div class="scan-modal">
+            <div class="scan-spinner">
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring ring-2"></div>
+                <div class="spinner-ring ring-3"></div>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#2E7DFF" stroke-width="2" class="spinner-icon">
+                    <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>
+                </svg>
+            </div>
+            <h3>Analyzing Product Label</h3>
+            <div class="scan-steps">
+                <div class="scan-step active" id="step1">
+                    <span class="step-dot"></span>
+                    <span>Preprocessing image…</span>
+                </div>
+                <div class="scan-step" id="step2">
+                    <span class="step-dot"></span>
+                    <span>Running OCR extraction…</span>
+                </div>
+                <div class="scan-step" id="step3">
+                    <span class="step-dot"></span>
+                    <span>Extracting declarations…</span>
+                </div>
+                <div class="scan-step" id="step4">
+                    <span class="step-dot"></span>
+                    <span>Checking PCR 2011 compliance…</span>
+                </div>
+                <div class="scan-step" id="step5">
+                    <span class="step-dot"></span>
+                    <span>Generating report…</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Shape selector interactivity
+document.querySelectorAll('.shape-card').forEach(card => {
+    card.addEventListener('click', function() {
+        document.querySelectorAll('.shape-card').forEach(c => c.classList.remove('active'));
+        this.classList.add('active');
+    });
+});
+
+// PDP area preview
+function updatePDP() {
+    const h = parseFloat(document.getElementById('pkg_height').value) || 0;
+    const w = parseFloat(document.getElementById('pkg_width').value) || 0;
+    const shape = document.querySelector('input[name="package_shape"]:checked').value;
+    const preview = document.getElementById('pdpPreview');
+    const val = document.getElementById('pdpValue');
+
+    if (h > 0 && w > 0) {
+        let area;
+        if (shape === 'rectangular') {
+            area = h * w;
+        } else if (shape === 'cylindrical') {
+            area = 0.4 * h * Math.PI * w;
+        } else {
+            area = 0.4 * 2 * h * w;
+        }
+        val.textContent = area.toFixed(1) + ' cm²';
+        preview.style.display = 'flex';
+    } else {
+        preview.style.display = 'none';
+    }
+}
+document.querySelectorAll('#pkg_height, #pkg_width, #pkg_depth').forEach(el => el.addEventListener('input', updatePDP));
+document.querySelectorAll('input[name="package_shape"]').forEach(el => el.addEventListener('change', updatePDP));
+
+// Scan form submission with loading overlay
+document.getElementById('scanForm').addEventListener('submit', function() {
+    const overlay = document.getElementById('scanOverlay');
+    overlay.style.display = 'flex';
+
+    // Animate steps
+    const steps = ['step1', 'step2', 'step3', 'step4', 'step5'];
+    steps.forEach((id, i) => {
+        setTimeout(() => {
+            document.getElementById(id).classList.add('active');
+            if (i > 0) document.getElementById(steps[i-1]).classList.add('done');
+        }, i * 2000);
+    });
+});
+</script>
+{% endblock %}

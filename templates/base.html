@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Pack Proof — Legal Metrology Compliance Engine for checking packaged commodity compliance under PCR 2011">
+    <title>{% block title %}Pack Proof{% endblock %} — Legal Metrology Compliance</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    {% block head_extra %}{% endblock %}
+</head>
+<body>
+    {% if current_user and not error_code %}
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-group">
+                    <div class="logo-icon">
+                        <svg viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="40" height="40" rx="10" fill="url(#logo-gradient)"/>
+                            <path d="M12 28V14l8-4 8 4v14l-8 4-8-4z" fill="rgba(255,255,255,0.2)" stroke="white" stroke-width="1.5"/>
+                            <path d="M20 10v18M12 14l8 4 8-4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+                            <circle cx="20" cy="20" r="3" fill="white" opacity="0.9"/>
+                            <defs>
+                                <linearGradient id="logo-gradient" x1="0" y1="0" x2="40" y2="40">
+                                    <stop stop-color="#2E7DFF"/>
+                                    <stop offset="1" stop-color="#1a5fd4"/>
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <div class="logo-text">
+                        <span class="logo-title">Pack Proof</span>
+                        <span class="logo-subtitle">Legal Metrology Engine</span>
+                    </div>
+                </div>
+                <button class="sidebar-toggle" id="sidebarToggle" title="Toggle sidebar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="{{ url_for('dashboard') }}" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}" id="nav-dashboard">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                    <span>Dashboard</span>
+                </a>
+                {% if current_user.role != 'viewer' %}
+                <a href="{{ url_for('scan') }}" class="nav-item {% if active_page == 'scan' %}active{% endif %}" id="nav-scan">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                    <span>Scan Product</span>
+                </a>
+                {% endif %}
+                <a href="{{ url_for('history') }}" class="nav-item {% if active_page == 'history' %}active{% endif %}" id="nav-history">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span>Scan History</span>
+                </a>
+                <a href="{{ url_for('rules_explorer') }}" class="nav-item {% if active_page == 'rules' %}active{% endif %}" id="nav-rules">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                    <span>Rules Reference</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="user-info">
+                    <div class="user-avatar">{{ current_user.username[0]|upper }}</div>
+                    <div class="user-details">
+                        <span class="user-name">{{ current_user.full_name or current_user.username }}</span>
+                        <span class="user-role badge badge-{{ current_user.role }}">{{ current_user.role|title }}</span>
+                    </div>
+                </div>
+                <a href="{{ url_for('logout') }}" class="logout-btn" title="Sign out">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <button class="mobile-toggle" id="mobileToggle">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+                    </button>
+                    <div class="breadcrumb">
+                        <span class="breadcrumb-item">Pack Proof</span>
+                        <span class="breadcrumb-sep">›</span>
+                        <span class="breadcrumb-item active">{% block breadcrumb %}Dashboard{% endblock %}</span>
+                    </div>
+                </div>
+                <div class="topbar-right">
+                    <div class="ministry-badge">
+                        <span class="ministry-text">Department of Consumer Affairs</span>
+                        <span class="ministry-sub">Ministry of Consumer Affairs, Food & Public Distribution</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Flash Messages -->
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-container">
+                {% for category, message in messages %}
+                <div class="flash flash-{{ category }}" role="alert">
+                    <span>{{ message }}</span>
+                    <button class="flash-close" onclick="this.parentElement.remove()">×</button>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+
+            <div class="content-area">
+                {% block content %}{% endblock %}
+            </div>
+
+            <footer class="main-footer">
+                <span>Pack Proof v2.0 — Legal Metrology (Packaged Commodities) Rules, 2011 Compliance Engine</span>
+                <span>Powered by Hybrid OCR + Rule Engine</span>
+            </footer>
+        </main>
+    </div>
+
+    {% elif error_code %}
+    <div class="error-page">
+        <h1 class="error-code">{{ error_code }}</h1>
+        <p class="error-message">{{ error_message }}</p>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-primary">Go to Dashboard</a>
+    </div>
+    {% else %}
+    {% block fullpage %}{% endblock %}
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

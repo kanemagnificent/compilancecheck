@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Rules Reference{% endblock %}
+{% block breadcrumb %}Rules Reference{% endblock %}
+
+{% block content %}
+<div class="rules-page">
+    <div class="page-header">
+        <h2>Legal Metrology Rules Reference</h2>
+        <p>Encoded rules from the Legal Metrology (Packaged Commodities) Rules, 2011 and Legal Metrology Act, 2009</p>
+    </div>
+
+    <!-- Rules Cards -->
+    <div class="rules-grid">
+        {% for rule in rules %}
+        <div class="card rule-card animate-slide-up" style="animation-delay: {{ loop.index * 0.05 }}s">
+            <div class="card-header">
+                <div class="rule-title-group">
+                    <span class="rule-id-badge {% if rule.encoded %}badge-encoded{% else %}badge-stub{% endif %}">{{ rule.rule_id }}</span>
+                    <h3>{{ rule.title }}</h3>
+                </div>
+                <div class="rule-meta">
+                    <span class="badge badge-{{ rule.category|lower|replace(' ', '-') }}">{{ rule.category }}</span>
+                    <span class="badge {% if rule.encoded %}badge-active{% else %}badge-inactive{% endif %}">
+                        {% if rule.encoded %}✓ Encoded{% else %}○ Reference{% endif %}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <p class="rule-description">{{ rule.description }}</p>
+
+                <div class="rule-points">
+                    <h4>Key Provisions</h4>
+                    <ul>
+                        {% for point in rule.key_points %}
+                        <li>{{ point }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+
+                <div class="rule-source">
+                    <small>Source: {{ rule.act }}</small>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Font Size Reference Table -->
+    <div class="card animate-slide-up" style="animation-delay: 0.5s">
+        <div class="card-header">
+            <h3>📏 Font Size Quick Reference (Rule 7, Table I)</h3>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="data-table font-table">
+                    <thead>
+                        <tr>
+                            <th>PDP Area (cm²)</th>
+                            <th>Min Height — Printed (mm)</th>
+                            <th>Min Height — Moulded (mm)</th>
+                            <th>Min Width Rule</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>&lt; 50</td>
+                            <td><strong>1.0</strong></td>
+                            <td><strong>2.0</strong></td>
+                            <td rowspan="5">Width ≥ ⅓ of height<br><small>(except 1, i, I, l)</small></td>
+                        </tr>
+                        <tr>
+                            <td>50 – 100</td>
+                            <td><strong>1.5</strong></td>
+                            <td><strong>3.0</strong></td>
+                        </tr>
+                        <tr>
+                            <td>100 – 500</td>
+                            <td><strong>2.5</strong></td>
+                            <td><strong>4.0</strong></td>
+                        </tr>
+                        <tr>
+                            <td>500 – 2,500</td>
+                            <td><strong>4.0</strong></td>
+                            <td><strong>6.0</strong></td>
+                        </tr>
+                        <tr>
+                            <td>&gt; 2,500</td>
+                            <td><strong>6.0</strong></td>
+                            <td><strong>6.0</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDP Area Calculator -->
+    <div class="card animate-slide-up" style="animation-delay: 0.55s">
+        <div class="card-header">
+            <h3>🧮 PDP Area Calculator (Rule 3)</h3>
+        </div>
+        <div class="card-body">
+            <div class="pdp-calculator">
+                <div class="calc-inputs">
+                    <div class="form-group">
+                        <label>Package Shape</label>
+                        <select id="calcShape" class="form-select">
+                            <option value="rectangular">Rectangular (H × W)</option>
+                            <option value="cylindrical">Cylindrical (40% × H × πD)</option>
+                            <option value="other">Other (40% × Surface Area)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Height (cm)</label>
+                        <input type="number" id="calcHeight" step="0.1" min="0" placeholder="e.g. 15">
+                    </div>
+                    <div class="form-group">
+                        <label>Width / Diameter (cm)</label>
+                        <input type="number" id="calcWidth" step="0.1" min="0" placeholder="e.g. 8">
+                    </div>
+                    <button type="button" class="btn btn-primary" onclick="calculatePDP()">Calculate</button>
+                </div>
+                <div class="calc-result" id="calcResult" style="display:none">
+                    <div class="calc-output">
+                        <span class="calc-label">PDP Area:</span>
+                        <span class="calc-value" id="calcPDPArea">—</span>
+                    </div>
+                    <div class="calc-output">
+                        <span class="calc-label">Min Font Height (printed):</span>
+                        <span class="calc-value" id="calcMinFont">—</span>
+                    </div>
+                    <div class="calc-output">
+                        <span class="calc-label">Min Font Height (moulded):</span>
+                        <span class="calc-value" id="calcMinFontMould">—</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MRP Format Examples -->
+    <div class="card animate-slide-up" style="animation-delay: 0.6s">
+        <div class="card-header">
+            <h3>💰 MRP Format Reference (Rule 6(1)(e))</h3>
+        </div>
+        <div class="card-body">
+            <div class="format-examples">
+                <div class="format-item format-valid">
+                    <span class="format-label">✓ Valid</span>
+                    <code>MRP Rs. 150 (inclusive of all taxes)</code>
+                </div>
+                <div class="format-item format-valid">
+                    <span class="format-label">✓ Valid</span>
+                    <code>MRP ₹ 299.50 incl. of all taxes</code>
+                </div>
+                <div class="format-item format-valid">
+                    <span class="format-label">✓ Valid</span>
+                    <code>Maximum Retail Price Rs. 500 (inclusive of all taxes)</code>
+                </div>
+                <div class="format-item format-invalid">
+                    <span class="format-label">✗ Invalid</span>
+                    <code>Price: ₹ 150</code>
+                    <small>Missing "MRP" label and "inclusive of all taxes"</small>
+                </div>
+                <div class="format-item format-invalid">
+                    <span class="format-label">✗ Invalid</span>
+                    <code>MRP Rs. 150 + GST</code>
+                    <small>MRP must be inclusive of all taxes</small>
+                </div>
+            </div>
+            <div class="format-note">
+                <p><strong>Note:</strong> MRP must be rounded to the nearest rupee or 50 paise. Stickers with revised <em>lower</em> MRP are permitted, but must not cover the original declaration.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function calculatePDP() {
+    const shape = document.getElementById('calcShape').value;
+    const h = parseFloat(document.getElementById('calcHeight').value) || 0;
+    const w = parseFloat(document.getElementById('calcWidth').value) || 0;
+    const result = document.getElementById('calcResult');
+
+    if (h <= 0 || w <= 0) { result.style.display = 'none'; return; }
+
+    let area;
+    if (shape === 'rectangular') {
+        area = h * w;
+    } else if (shape === 'cylindrical') {
+        area = 0.4 * h * Math.PI * w;
+    } else {
+        area = 0.4 * 2 * h * w;
+    }
+
+    // Font size lookup
+    const table = [
+        { max: 50, printed: 1.0, moulded: 2.0 },
+        { max: 100, printed: 1.5, moulded: 3.0 },
+        { max: 500, printed: 2.5, moulded: 4.0 },
+        { max: 2500, printed: 4.0, moulded: 6.0 },
+        { max: Infinity, printed: 6.0, moulded: 6.0 },
+    ];
+    let font = table[table.length - 1];
+    for (const row of table) {
+        if (area < row.max) { font = row; break; }
+    }
+
+    document.getElementById('calcPDPArea').textContent = area.toFixed(1) + ' cm²';
+    document.getElementById('calcMinFont').textContent = font.printed + ' mm';
+    document.getElementById('calcMinFontMould').textContent = font.moulded + ' mm';
+    result.style.display = 'block';
+}
+</script>
+{% endblock %}

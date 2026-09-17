@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block title %}Scan Result — {{ record.scan_id[:8] }}{% endblock %}
+{% block breadcrumb %}Scan Result{% endblock %}
+
+{% block content %}
+<div class="result-page">
+    <!-- Status Banner -->
+    <div class="status-banner {% if record.status == 'COMPLIANT' %}banner-compliant{% elif record.status == 'COMPLIANT WITH WARNINGS' %}banner-warning{% else %}banner-noncompliant{% endif %} animate-slide-up">
+        <div class="banner-left">
+            <div class="score-ring">
+                <svg viewBox="0 0 120 120" class="score-svg">
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,0.2)" stroke-width="8"/>
+                    <circle cx="60" cy="60" r="52" fill="none" stroke="white" stroke-width="8"
+                        stroke-dasharray="{{ (record.compliance_score or 0) * 3.27 }} 327"
+                        stroke-linecap="round" transform="rotate(-90 60 60)"
+                        class="score-circle-animated"/>
+                </svg>
+                <div class="score-text">
+                    <span class="score-number">{{ record.compliance_score or 0 }}</span>
+                    <span class="score-max">/100</span>
+                </div>
+            </div>
+            <div class="banner-info">
+                <h2>{{ record.status }}</h2>
+                <p>Scan ID: <code>{{ record.scan_id[:8] }}</code> · {{ record.timestamp[:10] }}</p>
+                <p>File: {{ record.filename[:50] }}</p>
+                {% if record.product_category %}
+                <span class="category-badge category-light">{{ record.product_category }}</span>
+                {% endif %}
+            </div>
+        </div>
+        <div class="banner-actions">
+            <a href="{{ url_for('download_pdf', scan_id=record.scan_id) }}" class="btn btn-outline-light">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download Report
+            </a>
+            <a href="{{ url_for('scan') }}" class="btn btn-outline-light">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                New Scan
+            </a>
+        </div>
+    </div>
+
+    <div class="result-grid">
+        <!-- Statutory Disclosures Table -->
+        <div class="card animate-slide-up" style="animation-delay: 0.1s">
+            <div class="card-header">
+                <h3>📋 Statutory Disclosures (PCR 2011)</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="data-table disclosure-table">
+                        <thead>
+                            <tr>
+                                <th>Declaration</th>
+                                <th>Rule</th>
+                                <th>Extracted Value</th>
+                                <th>Confidence</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for step in record.audit_trail %}
+                            {% set field_data = record.fields.get(step.field, {}) %}
+                            <tr>
+                                <td><strong>{{ step.label }}</strong></td>
+                                <td><code class="rule-ref">{{ step.get('rule', '—') }}</code></td>
+                                <td class="value-cell">
+                                    {% if field_data and field_data.value %}
+                                    <span class="extracted-value">{{ field_data.value[:80] }}{% if field_data.value|length > 80 %}…{% endif %}</span>
+                                    {% else %}
+                                    <span class="not-detected">Not detected</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% set conf = step.get('confidence', 0) %}
+                                    <div class="confidence-bar mini">
+                                        <div class="confidence-fill {% if conf >= 0.7 %}conf-high{% elif conf >= 0.4 %}conf-mid{% else %}conf-low{% endif %}" style="width: {{ (conf * 100)|int }}%"></div>
+                                        <span class="confidence-text">{{ (conf * 100)|round(0)|int }}%</span>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if step.result == 'pass' %}
+                                    <span class="result-badge result-pass">✓ Pass</span>
+                                    {% elif step.result == 'fail' %}
+                                    <span class="result-badge result-fail">✗ Fail</span>
+                                    {% elif step.result == 'warning' %}
+                                    <span class="result-badge result-warning">⚠ Warning</span>
+                                    {% elif step.result == 'skip' %}
+                                    <span class="result-badge result-skip">— Skip</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Violations & Warnings -->
+        {% if record.violations or record.warnings %}
+        <div class="violations-grid">
+            {% if record.violations %}
+            <div class="card card-violations animate-slide-up" style="animation-delay: 0.2s">
+                <div class="card-header">
+                    <h3>🚫 Violations ({{ record.violations|length }})</h3>
+                </div>
+                <div class="card-body">
+                    {% for v in record.violations %}
+                    <div class="violation-item">
+                        <span class="violation-icon">✗</span>
+                        <div class="violation-content">
+                            {% if v is mapping %}
+                            <strong>{{ v.get('label', v.get('field', 'Unknown')) }}</strong>
+                            <span class="violation-rule">{{ v.get('rule', '') }}</span>
+                            <p>{{ v.get('issue', '') }}</p>
+                            {% else %}
+                            <p>{{ v }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            {% if record.warnings %}
+            <div class="card card-warnings animate-slide-up" style="animation-delay: 0.25s">
+                <div class="card-header">
+                    <h3>⚠️ Warnings ({{ record.warnings|length }})</h3>
+                </div>
+                <div class="card-body">
+                    {% for w in record.warnings %}
+                    <div class="warning-item">
+                        <span class="warning-icon">⚠</span>
+                        <div class="warning-content">
+                            {% if w is mapping %}
+                            <strong>{{ w.get('label', w.get('field', 'Unknown')) }}</strong>
+                            <span class="warning-rule">{{ w.get('rule', '') }}</span>
+                            <p>{{ w.get('issue', '') }}</p>
+                            {% else %}
+                            <p>{{ w }}</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <!-- Font Size Check -->
+        {% if record.font_size_check %}
+        <div class="card animate-slide-up" style="animation-delay: 0.3s">
+            <div class="card-header">
+                <h3>🔤 Font Size Analysis (Rule 7)</h3>
+            </div>
+            <div class="card-body">
+                <div class="font-check-grid">
+                    <div class="font-metric">
+                        <span class="metric-label">PDP Area</span>
+                        <span class="metric-value">{{ record.font_size_check.pdp_area_cm2 or '—' }} cm²</span>
+                    </div>
+                    <div class="font-metric">
+                        <span class="metric-label">Min Required</span>
+                        <span class="metric-value">{{ record.font_size_check.min_required_mm or '—' }} mm</span>
+                    </div>
+                    <div class="font-metric">
+                        <span class="metric-label">Estimated Height</span>
+                        <span class="metric-value">{{ record.font_size_check.estimated_height_mm or '—' }} mm</span>
+                    </div>
+                    <div class="font-metric">
+                        <span class="metric-label">Table Used</span>
+                        <span class="metric-value">{{ record.font_size_check.table_used or '—' }}</span>
+                    </div>
+                    <div class="font-metric">
+                        <span class="metric-label">Status</span>
+                        {% if record.font_size_check.compliant is true %}
+                        <span class="result-badge result-pass">✓ Compliant</span>
+                        {% elif record.font_size_check.compliant is false %}
+                        <span class="result-badge result-fail">✗ Non-Compliant</span>
+                        {% else %}
+                        <span class="result-badge result-skip">— Not Verified</span>
+                        {% endif %}
+                    </div>
+                </div>
+                {% if record.font_size_check.issue %}
+                <div class="font-issue">
+                    <p>{{ record.font_size_check.issue }}</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Toxicity Advisory -->
+        {% if record.toxicity_analysis %}
+        {% set tox = record.toxicity_analysis %}
+        <div class="card animate-slide-up" style="animation-delay: 0.35s">
+            <div class="card-header">
+                <h3>🧪 Ingredient Toxicity Advisory</h3>
+                <span class="status-badge {% if tox.verdict == 'SAFE' %}status-compliant{% elif tox.verdict == 'USE WITH CAUTION' %}status-warning{% elif tox.verdict == 'NOT RECOMMENDED' %}status-noncompliant{% else %}status-rescan{% endif %}">
+                    {{ tox.verdict }}
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="tox-score-bar">
+                    <div class="tox-fill" style="width: {{ tox.toxicity_score }}%; background: {% if tox.toxicity_score >= 80 %}#10B981{% elif tox.toxicity_score >= 50 %}#F59E0B{% else %}#EF4444{% endif %}"></div>
+                    <span class="tox-score-text">Toxicity Score: {{ tox.toxicity_score }}/100</span>
+                </div>
+
+                {% if tox.flagged_ingredients %}
+                <h4 class="section-subtitle">Flagged Ingredients</h4>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Ingredient</th>
+                                <th>Risk Level</th>
+                                <th>Category</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ing in tox.flagged_ingredients %}
+                            <tr>
+                                <td><strong>{{ ing.name }}</strong></td>
+                                <td>
+                                    <span class="risk-badge risk-{{ ing.risk_level }}">{{ ing.risk_level|title }}{% if ing.banned_in_india %} 🚫 BANNED{% endif %}</span>
+                                </td>
+                                <td>{{ ing.category|replace('_', ' ')|title }}</td>
+                                <td class="reason-cell">{{ ing.reason }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% endif %}
+
+                {% if tox.safe_ingredients %}
+                <h4 class="section-subtitle">Safe Ingredients ({{ tox.safe_ingredients|length }})</h4>
+                <div class="safe-ingredients">
+                    {% for ing in tox.safe_ingredients %}
+                    <span class="safe-tag">{{ ing }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- AI Analysis -->
+        {% if record.ai_analysis %}
+        <div class="card animate-slide-up" style="animation-delay: 0.4s">
+            <div class="card-header">
+                <h3>🤖 AI Analysis Summary</h3>
+            </div>
+            <div class="card-body">
+                <div class="ai-summary">
+                    <p>{{ record.ai_analysis.executive_summary }}</p>
+                </div>
+                {% if record.ai_analysis.corrective_actions %}
+                <h4 class="section-subtitle">Recommended Corrective Actions</h4>
+                <ul class="action-list">
+                    {% for action in record.ai_analysis.corrective_actions %}
+                    <li>{{ action }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                <div class="ai-disclaimer">
+                    <small>⚠ AI-generated analysis. For official enforcement, rely on manual verification by authorized inspectors.</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Audit Trail -->
+        <div class="card animate-slide-up" style="animation-delay: 0.45s">
+            <div class="card-header">
+                <h3>📝 Full Audit Trail</h3>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="data-table audit-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Check</th>
+                                <th>Rule</th>
+                                <th>Severity</th>
+                                <th>Result</th>
+                                <th>Confidence</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for step in record.audit_trail %}
+                            <tr>
+                                <td>{{ step.step }}</td>
+                                <td><strong>{{ step.label }}</strong></td>
+                                <td><code class="rule-ref">{{ step.get('rule', '—') }}</code></td>
+                                <td>
+                                    {% set sev = step.get('severity', 'minor') %}
+                                    <span class="severity-badge severity-{{ sev }}">{{ sev|title }}</span>
+                                </td>
+                                <td>
+                                    {% if step.result == 'pass' %}
+                                    <span class="result-badge result-pass">✓</span>
+                                    {% elif step.result == 'fail' %}
+                                    <span class="result-badge result-fail">✗</span>
+                                    {% elif step.result == 'warning' %}
+                                    <span class="result-badge result-warning">⚠</span>
+                                    {% else %}
+                                    <span class="result-badge result-skip">—</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ (step.confidence * 100)|round(0)|int }}%</td>
+                                <td class="reason-cell">{{ step.reason }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
